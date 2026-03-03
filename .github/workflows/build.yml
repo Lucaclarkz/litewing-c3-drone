@@ -1,8 +1,9 @@
-name: Build ESP32-C3 Firmware
+name: Build ESP32-C3 Firmware (Arduino)
 
 on:
   push:
     branches: ["main"]
+  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -10,54 +11,40 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Install Arduino CLI
-        run: |
-          curl -fsSL https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Linux_64bit.tar.gz -o arduino-cli.tar.gz
-          tar -xzf arduino-cli.tar.gz
-          sudo mv arduino-cli /usr/local/bin/
-          arduino-cli version
+      - name: Setup Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
 
-      - name: Configure Arduino CLI (ESP32 + allow git installs)
+      - name: Install ESP32 Arduino Core
         run: |
           arduino-cli config init
           arduino-cli config set board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
-          arduino-cli config set library.enable_unsafe_install true
-          arduino-cli config dump
-
-      - name: Install ESP32 Core
-        run: |
           arduino-cli core update-index
           arduino-cli core install esp32:esp32@2.0.17
+          arduino-cli core list
 
-      - name: Install Libraries (Async + MPU6050)
+      # If your sketch uses Adafruit_MPU6050, keep these.
+      # If you DO NOT use them, you can delete this whole step.
+      - name: Install Libraries (MPU6050)
         run: |
           arduino-cli lib update-index
-
-          # Async libs (GitHub)
-          arduino-cli lib install --git-url https://github.com/me-no-dev/AsyncTCP.git
-          arduino-cli lib install --git-url https://github.com/me-no-dev/ESPAsyncWebServer.git
-
-          # Adafruit libs (try Library Manager official names first)
           arduino-cli lib install "Adafruit MPU6050"
           arduino-cli lib install "Adafruit Unified Sensor"
           arduino-cli lib install "Adafruit BusIO"
 
-      - name: Prepare Sketch
-        run: |
-          mkdir -p sketch/drone
-          cp drone/drone.ino sketch/drone/drone.ino
-
+      # Your sketch is in: src/main.ino (from your repo screenshot)
       - name: Compile ESP32-C3
         run: |
           arduino-cli compile \
             --fqbn esp32:esp32:esp32c3 \
+            --warnings all \
             --output-dir build \
-            sketch/drone
+            ./src
 
       - name: Upload BIN (Artifacts)
         uses: actions/upload-artifact@v4
         with:
-          name: firmware
+          name: firmware-bin
           path: build/*.bin
